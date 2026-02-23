@@ -8,23 +8,40 @@
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <style>
-        body { background: #1a1a2e; color: white; text-align: center; font-family: sans-serif; margin: 0; padding: 0; }
-        #board { width: 90vw; max-width: 350px; margin: 20px auto; border: 2px solid #444; }
-        h3 { margin-top: 15px; color: #00d2ff; }
+        body { background: #1a1a2e; color: white; text-align: center; font-family: sans-serif; margin: 0; padding: 0; overflow: hidden; }
+        #board { width: 90vw; max-width: 350px; margin: 20px auto; border: 2px solid #444; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        h3 { margin-top: 15px; color: #00d2ff; text-shadow: 1px 1px 2px black; }
+        .status-bar { background: rgba(0,0,0,0.3); padding: 10px; margin: 10px; border-radius: 8px; font-size: 14px; }
     </style>
 </head>
 <body>
     <h3>♟️ Chess Arena</h3>
     <div id="board"></div>
-    <p id="status">Board Ready! Moves check karein.</p>
+    <div class="status-bar">
+        <p id="status">Board Ready! Pieces load ho gaye hain.</p>
+    </div>
     
     <script>
-        // Basic board setup jise aap mobile par drag kar sakte hain
-        var board = Chessboard('board', {
-            draggable: true,
-            dropOffBoard: 'snapback',
-            position: 'start'
-        });
+        // Pieces ki images ka sahi CDN path
+        function pieceTheme (piece) {
+          return 'https://chessboardjs.com/img/chesspieces/wikipedia/' + piece + '.png'
+        }
+
+        var config = {
+          draggable: true,
+          position: 'start',
+          pieceTheme: pieceTheme, // Ye line pieces ko dikhayegi
+          dropOffBoard: 'snapback'
+        }
+        
+        var board = Chessboard('board', config);
+
+        // Mobile par scroll rokne ke liye
+        window.addEventListener('touchmove', function(e) {
+            if (e.target.closest('#board')) {
+                e.preventDefault();
+            }
+        }, { passive: false });
     </script>
 </body>
 </html>
