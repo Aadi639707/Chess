@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Chess Multiplayer TMA</title>
+    <title>Chess Pro TMA</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
@@ -9,75 +9,124 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body { background: #1a1a2e; color: white; text-align: center; font-family: sans-serif; margin: 0; overflow: hidden; }
-        #board { width: 90vw; max-width: 380px; margin: 20px auto; border: 3px solid #444; border-radius: 5px; }
-        .info { background: rgba(0,0,0,0.5); padding: 10px; margin: 10px; border-radius: 10px; font-size: 14px; }
+        body { background: #121212; color: #e0e0e0; text-align: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; overflow-x: hidden; }
+        #board { width: 90vw; max-width: 360px; margin: 15px auto; border: 4px solid #333; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
+        .info-panel { background: #1e1e1e; padding: 10px; margin: 10px; border-radius: 12px; border: 1px solid #333; }
+        .captured-pieces { height: 30px; display: flex; justify-content: center; gap: 5px; margin-top: 5px; font-size: 20px; }
+        #status { font-weight: bold; color: #00d2ff; margin: 5px 0; }
+        .player-info { display: flex; justify-content: space-around; font-size: 14px; margin-bottom: 5px; color: #aaa; }
     </style>
 </head>
 <body>
-    <h3>♟️ Chess Arena</h3>
-    <div id="board"></div>
-    <div class="info">
-        <p id="status">Connecting to server...</p>
+    <h3>♟️ Grandmaster Arena</h3>
+    
+    <div class="info-panel">
+        <div class="player-info">
+            <div id="p2-tag">Opponent: Waiting...</div>
+        </div>
+        <div id="captured-black" class="captured-pieces"></div>
+        
+        <div id="board"></div>
+        
+        <div id="captured-white" class="captured-pieces"></div>
+        <div class="player-info">
+            <div id="p1-tag">You: Joined</div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <p id="status">Syncing with server...</p>
     </div>
 
     <script>
         var board = null;
         var game = new Chess();
-        // Aapka naya backend link yahan connect kar diya hai
         var socket = io('https://chess-backend-9jsu.onrender.com');
+        var playersCount = 0;
 
         const urlParams = new URLSearchParams(window.location.search);
-        const gameId = urlParams.get('gameId') || 'default_room';
+        const gameId = urlParams.get('gameId') || 'default';
 
-        function onDrop (source, target) {
-            var move = game.move({
-                from: source,
-                to: target,
-                promotion: 'q' 
+        // Gotiyaan (Captured Pieces) Tracker
+        function updateCaptured(history) {
+            const whiteCaptured = [];
+            const blackCaptured = [];
+            const pieces = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
+
+            history.forEach(move => {
+                if (move.captured) {
+                    if (move.color === 'w') blackCaptured.push(pieces[move.captured]);
+                    else whiteCaptured.push(pieces[move.captured]);
+                }
             });
 
-            if (move === null) return 'snapback';
-
-            // Move ko server par bhejna
-            socket.emit('move', { gameId: gameId, move: move });
-            updateStatus();
+            document.getElementById('captured-white').innerText = whiteCaptured.join(' ');
+            document.getElementById('captured-black').innerText = blackCaptured.join(' ');
         }
 
-        function updateStatus() {
+        function onDragStart (source, piece, position, orientation) {
+            // Sirf tab khel sakte hain jab 2 bnde join ho chuke hon
+            if (game.game_over() || playersCount < 2) return false;
+
+            // Sirf apni turn par move kar sakte hain
+            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+                (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+                return false;
+            }
+        }
+
+        function onDrop (source, target) {
+            var move = game.move({ from: source, to: target, promotion: 'q' });
+            if (move === null) return 'snapback';
+
+            socket.emit('move', { gameId: gameId, move: move });
+            updateUI();
+        }
+
+        function updateUI() {
             var status = '';
             var moveColor = (game.turn() === 'w') ? 'White' : 'Black';
 
             if (game.in_checkmate()) {
-                status = 'Game Over! ' + moveColor + ' is in checkmate.';
+                status = 'Game Over! ' + moveColor + ' is checkmated.';
             } else if (game.in_draw()) {
                 status = 'Game Over! Draw.';
             } else {
-                status = moveColor + ' ki turn hai.';
-                if (game.in_check()) { status += ' (Check!)'; }
+                status = moveColor + "'s Turn";
+                if (game.in_check()) status += ' (Check!)';
             }
+            
+            if (playersCount < 2) status = "Waiting for Opponent...";
+            
             document.getElementById('status').innerText = status;
+            updateCaptured(game.history({ verbose: true }));
         }
 
         socket.on('connect', () => {
             socket.emit('joinGame', gameId);
-            document.getElementById('status').innerText = "Connected! Khelna shuru karein.";
+        });
+
+        // Backend ko thoda update karna padega players count ke liye
+        socket.on('playerUpdate', (count) => {
+            playersCount = count;
+            document.getElementById('p2-tag').innerText = count >= 2 ? "Opponent: Ready" : "Opponent: Searching...";
+            updateUI();
         });
 
         socket.on('move', (move) => {
             game.move(move);
             board.position(game.fen());
-            updateStatus();
+            updateUI();
         });
 
-        var config = {
+        board = Chessboard('board', {
             draggable: true,
             position: 'start',
             pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+            onDragStart: onDragStart,
             onDrop: onDrop
-        };
-        board = Chessboard('board', config);
-        updateStatus();
+        });
+        updateUI();
     </script>
 </body>
 </html>
